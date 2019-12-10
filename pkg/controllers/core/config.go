@@ -21,6 +21,9 @@ const (
 
 	systemNamespace = "riff-system"
 
+	ingressAnnotationKey = "kubernetes.io/ingress.class"
+	ingressClassKey      = "ingress.class"
+
 	settingsConfigMapName = kustomizePrefix + "-settings"
 	defaultDomainKey      = "defaultDomain"
 	defaultDomain         = "example.com"

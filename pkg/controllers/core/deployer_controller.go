@@ -408,12 +408,14 @@ func (r *DeployerReconciler) reconcileIngress(ctx context.Context, log logr.Logg
 		return nil, err
 	}
 
-	// delete ingress if no longer needed
+	// delete ingress if no longer needed and number of child ingress > 0
 	if desiredIngress == nil {
-		log.Info("deleting ingress", "ingress", actualIngress)
-		if err := r.Delete(ctx, &actualIngress); err != nil {
-			log.Error(err, "unable to delete ingress for Deployer", "ingress", actualIngress)
-			return nil, err
+		if len(childIngresses.Items) > 0 {
+			log.Info("deleting ingress", "ingress", actualIngress)
+			if err := r.Delete(ctx, &actualIngress); err != nil {
+				log.Error(err, "unable to delete ingress for Deployer", "ingress", actualIngress)
+				return nil, err
+			}
 		}
 		return nil, nil
 	}
@@ -452,17 +454,17 @@ func (r *DeployerReconciler) ingressSemanticEquals(desiredIngress, ingress *netw
 }
 
 func (r *DeployerReconciler) constructIngressForDeployer(deployer *corev1alpha1.Deployer, coreSettings *corev1.ConfigMap) (*networkingv1beta1.Ingress, error) {
-	if deployer.Status.ServiceRef == nil || deployer.Spec.IngressPolicy == corev1alpha1.IngressPolicyClusterLocal {
-		// skip ingress
-		return nil, nil
-	}
+	// if deployer.Status.ServiceRef == nil || deployer.Spec.IngressPolicy == corev1alpha1.IngressPolicyClusterLocal {
+	// 	// skip ingress
+	// 	return nil, nil
+	// }
 	labels := r.constructLabelsForDeployer(deployer)
 	host := r.constructHostForDeployer(deployer, coreSettings)
 
 	ingress := &networkingv1beta1.Ingress{
 		ObjectMeta: metav1.ObjectMeta{
 			Labels:       labels,
-			Annotations:  make(map[string]string),
+			Annotations:  r.constructAnnotations(coreSettings),
 			GenerateName: fmt.Sprintf("%s-deployer-", deployer.Name),
 			Namespace:    deployer.Namespace,
 		},
@@ -607,6 +609,14 @@ func (r *DeployerReconciler) constructHostForDeployer(deployer *corev1alpha1.Dep
 	}
 
 	return fmt.Sprintf("%s.%s.%s", deployer.Name, deployer.Namespace, domain)
+}
+
+func (r *DeployerReconciler) constructAnnotations(cm *corev1.ConfigMap) map[string]string {
+	annotations := make(map[string]string)
+	if d := cm.Data[ingressClassKey]; d != "" {
+		annotations[ingressAnnotationKey] = d
+	}
+	return annotations
 }
 
 func (r *DeployerReconciler) SetupWithManager(mgr ctrl.Manager) error {
